@@ -9,7 +9,12 @@ from app.causal.psm import PSMEstimator, PSMNoMatchError
 from app.causal.uplift import UpliftEstimator
 
 
-def run_causal_analysis(method: str, payload: CausalAnalysisInput, psm_caliper: float = 0.5) -> CausalEstimate:
+def run_causal_analysis(
+    method: str,
+    payload: CausalAnalysisInput,
+    psm_caliper: float = 0.5,
+    uplift_buckets: int = 5,
+) -> CausalEstimate:
     method = method.lower().strip()
     if method not in MethodEnum.SUPPORTED:
         raise ApiError("unsupported_method", f"Unsupported method: {method}", status_code=422)
@@ -17,7 +22,7 @@ def run_causal_analysis(method: str, payload: CausalAnalysisInput, psm_caliper: 
     estimator_map = {
         "psm": PSMEstimator(caliper=psm_caliper),
         "did": DIDEstimator(),
-        "uplift": UpliftEstimator(),
+        "uplift": UpliftEstimator(n_buckets=uplift_buckets),
     }
 
     try:

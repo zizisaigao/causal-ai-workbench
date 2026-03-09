@@ -35,6 +35,9 @@ def test_uplift_runs():
         outcome_col='outcome',
         covariate_cols=['x1', 'x2'],
     )
-    result = UpliftEstimator(n_estimators=10).fit(payload)
+    result = UpliftEstimator(n_estimators=10, n_buckets=5).fit(payload)
     assert result.method == 'uplift'
     assert isinstance(result.diagnostics.get('top_uplift_preview'), list)
+    assert isinstance(result.diagnostics.get('sample_uplift_scores_preview'), list)
+    assert isinstance(result.diagnostics.get('bucket_summary'), list)
+    assert result.diagnostics.get('n_buckets') == 5

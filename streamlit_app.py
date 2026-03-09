@@ -13,7 +13,7 @@ st.set_page_config(page_title="Causal AI Workbench Demo", layout="wide")
 DEFAULT_API_BASE = "http://127.0.0.1:8000/api"
 
 st.title("Causal AI Workbench · MVP Demo")
-st.caption("上传 CSV，选择字段并调用现有 FastAPI 接口运行 DID / PSM 分析。")
+st.caption("上传 CSV，选择字段并调用现有 FastAPI 接口运行 DID / PSM / Uplift 分析。")
 
 api_base = st.text_input("API Base URL", value=DEFAULT_API_BASE)
 uploaded = st.file_uploader("上传 CSV 文件", type=["csv"])
@@ -34,7 +34,7 @@ st.subheader("数据预览")
 st.dataframe(df.head(20), use_container_width=True)
 
 columns = df.columns.tolist()
-method = st.selectbox("分析方法", ["did", "psm"])
+method = st.selectbox("分析方法", ["did", "psm", "uplift"])
 
 col1, col2 = st.columns(2)
 with col1:
@@ -49,6 +49,7 @@ st.markdown("### 方法参数")
 time_col = ""
 group_col = ""
 psm_caliper = 1.0
+uplift_buckets = 5
 
 if method == "did":
     p1, p2 = st.columns(2)
@@ -61,9 +62,12 @@ if method == "did":
             index=([""] + columns).index("is_target_group") if "is_target_group" in columns else 0,
         )
     st.caption("DID 需要 time_col 与 group_col。")
-else:
+elif method == "psm":
     psm_caliper = st.number_input("psm_caliper", min_value=0.000001, value=1.0, step=0.1, format="%.6f")
     st.caption("PSM 可能因样本重叠不足失败；可适当提高 caliper。")
+else:
+    uplift_buckets = st.selectbox("uplift_buckets", [5, 10], index=0)
+    st.caption("Uplift 会输出样本排序分数与分桶统计，用于干预优先级建议。")
 
 run_clicked = st.button("运行分析", type="primary")
 
@@ -87,8 +91,10 @@ if run_clicked:
         if method == "did":
             data["time_col"] = time_col
             data["group_col"] = group_col
-        else:
+        elif method == "psm":
             data["psm_caliper"] = str(psm_caliper)
+        else:
+            data["uplift_buckets"] = str(uplift_buckets)
 
         try:
             with st.spinner("调用后端分析中..."):
@@ -135,3 +141,16 @@ if st.session_state.analysis_payload:
     )
 else:
     st.info("运行成功后将在此展示报告，并可下载 Markdown 文件。")
+
+if st.session_state.analysis_payload and method == "uplift":
+    diagnostics = st.session_state.analysis_payload.get("result", {}).get("diagnostics", {})
+
+    st.markdown("#### Uplift 样本排序预览")
+    preview_rows = diagnostics.get("sample_uplift_scores_preview", [])
+    if preview_rows:
+        st.dataframe(pd.DataFrame(preview_rows), use_container_width=True)
+
+    st.markdown("#### Uplift 分桶结果")
+    bucket_rows = diagnostics.get("bucket_summary", [])
+    if bucket_rows:
+        st.dataframe(pd.DataFrame(bucket_rows), use_container_width=True)

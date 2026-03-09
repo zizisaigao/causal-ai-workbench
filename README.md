@@ -133,6 +133,7 @@ streamlit run streamlit_app.py
 当前页面支持方法：
 - `did`
 - `psm`（支持 `psm_caliper` 参数）
+- `uplift`（支持 `uplift_buckets`，输出分桶与 top 人群摘要）
 
 页面交互能力：
 - 上传 CSV 后自动读取列名，以下拉框选择 `treatment_col`、`outcome_col`、`time_col`、`group_col`
@@ -140,7 +141,9 @@ streamlit run streamlit_app.py
 - 动态参数区：
   - `did` 显示 `time_col`、`group_col`
   - `psm` 显示 `psm_caliper`
+  - `uplift` 显示 `uplift_buckets`
 - 结果区分开展示：核心结果（JSON）、markdown 报告、错误提示
+- uplift 场景额外展示：样本排序预览、分桶统计表
 - 支持下载 markdown 报告
 
 ## 运行测试

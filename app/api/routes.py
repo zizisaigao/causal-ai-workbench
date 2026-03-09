@@ -47,6 +47,7 @@ async def run_analysis(
     running_col: str | None = Form(default=None),
     cutoff: float | None = Form(default=None),
     psm_caliper: float = Form(default=0.5),
+    uplift_buckets: int = Form(default=5),
 ) -> AnalyzeResponse:
     df = pd.read_csv(file.file)
     covariate_cols = [c.strip() for c in covariates.split(",") if c.strip()]
@@ -63,6 +64,11 @@ async def run_analysis(
         metadata={"filename": Path(file.filename).name if file.filename else "uploaded.csv"},
     )
 
-    result = run_causal_analysis(method=method, payload=analysis_input, psm_caliper=psm_caliper)
+    result = run_causal_analysis(
+        method=method,
+        payload=analysis_input,
+        psm_caliper=psm_caliper,
+        uplift_buckets=uplift_buckets,
+    )
     report = generate_markdown_report(result)
     return AnalyzeResponse(result=result.__dict__, report_markdown=report)
