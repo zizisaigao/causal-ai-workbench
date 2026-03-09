@@ -70,8 +70,18 @@ uvicorn app.main:app --reload
 curl http://127.0.0.1:8000/api/health
 ```
 
+## 本地验证状态（与你反馈一致）
+- ✅ 服务可启动
+- ✅ `python -m pytest -q` 通过
+- ✅ `POST /api/data/summary` 成功
+- ✅ `POST /api/methods/recommend` 成功
+- ✅ `POST /api/analyze/did` 成功
+- ⚠️ `POST /api/analyze/psm` 在小样本下可能无匹配对（可通过 `psm_caliper` 调整，失败时返回结构化业务错误）
+
 ## API 最小调用示例（闭环）
 > 使用示例数据：`data/sample/hillstrom_style_sample.csv`
+>
+> **推荐最小闭环方法：DID**（该 sample 数据对 DID 更稳定；PSM 受匹配重叠与 caliper 影响更大）。
 
 1) 数据摘要
 ```bash
@@ -79,14 +89,25 @@ curl -X POST http://127.0.0.1:8000/api/data/summary \
   -F "file=@data/sample/hillstrom_style_sample.csv"
 ```
 
-2) 方法推荐
+2) 方法推荐（按 DID 场景请求）
 ```bash
 curl -X POST http://127.0.0.1:8000/api/methods/recommend \
   -H "Content-Type: application/json" \
-  -d '{"has_time": false, "has_group": false, "treatment_binary": true, "observational": true, "wants_targeting": false}'
+  -d '{"has_time": true, "has_group": true, "treatment_binary": true, "observational": true, "wants_targeting": false}'
 ```
 
-3) 执行 PSM 并生成报告（示例里显式放宽 `psm_caliper`，避免小样本无匹配）
+3) 执行 DID 并生成报告（推荐最小闭环）
+```bash
+curl -X POST http://127.0.0.1:8000/api/analyze/did \
+  -F "file=@data/sample/hillstrom_style_sample.csv" \
+  -F "treatment_col=treatment" \
+  -F "outcome_col=outcome" \
+  -F "covariates=age,income,prior_spend" \
+  -F "time_col=period" \
+  -F "group_col=is_target_group"
+```
+
+4) （可选）执行 PSM 并生成报告
 ```bash
 curl -X POST http://127.0.0.1:8000/api/analyze/psm \
   -F "file=@data/sample/hillstrom_style_sample.csv" \
