@@ -1,4 +1,4 @@
-"""Minimal Streamlit demo for causal-ai-workbench MVP."""
+"""Enhanced minimal Streamlit demo for causal-ai-workbench MVP."""
 
 from __future__ import annotations
 
@@ -18,6 +18,11 @@ st.caption("上传 CSV，选择字段并调用现有 FastAPI 接口运行 DID / 
 api_base = st.text_input("API Base URL", value=DEFAULT_API_BASE)
 uploaded = st.file_uploader("上传 CSV 文件", type=["csv"])
 
+if "analysis_payload" not in st.session_state:
+    st.session_state.analysis_payload = None
+if "analysis_error" not in st.session_state:
+    st.session_state.analysis_error = None
+
 if not uploaded:
     st.info("请先上传 CSV 文件。")
     st.stop()
@@ -29,62 +34,104 @@ st.subheader("数据预览")
 st.dataframe(df.head(20), use_container_width=True)
 
 columns = df.columns.tolist()
+method = st.selectbox("分析方法", ["did", "psm"])
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
     treatment_col = st.selectbox("treatment_col", columns, index=columns.index("treatment") if "treatment" in columns else 0)
 with col2:
     outcome_col = st.selectbox("outcome_col", columns, index=columns.index("outcome") if "outcome" in columns else 0)
-with col3:
-    method = st.selectbox("分析方法", ["did", "psm"])
 
 covariates_default = [c for c in ["age", "income", "prior_spend"] if c in columns]
-covariates = st.multiselect("covariates", options=columns, default=covariates_default)
+covariates = st.multiselect("covariates（多选）", options=columns, default=covariates_default)
 
-optional1, optional2, optional3 = st.columns(3)
-with optional1:
-    time_col = st.selectbox("time_col (可选)", [""] + columns, index=( [""] + columns ).index("period") if "period" in columns else 0)
-with optional2:
-    group_col = st.selectbox("group_col (可选)", [""] + columns, index=( [""] + columns ).index("is_target_group") if "is_target_group" in columns else 0)
-with optional3:
-    psm_caliper = st.number_input("psm_caliper (仅 PSM)", min_value=0.000001, value=1.0, step=0.1, format="%.6f")
+st.markdown("### 方法参数")
+time_col = ""
+group_col = ""
+psm_caliper = 1.0
 
-if st.button("运行分析", type="primary"):
+if method == "did":
+    p1, p2 = st.columns(2)
+    with p1:
+        time_col = st.selectbox("time_col", [""] + columns, index=([""] + columns).index("period") if "period" in columns else 0)
+    with p2:
+        group_col = st.selectbox(
+            "group_col",
+            [""] + columns,
+            index=([""] + columns).index("is_target_group") if "is_target_group" in columns else 0,
+        )
+    st.caption("DID 需要 time_col 与 group_col。")
+else:
+    psm_caliper = st.number_input("psm_caliper", min_value=0.000001, value=1.0, step=0.1, format="%.6f")
+    st.caption("PSM 可能因样本重叠不足失败；可适当提高 caliper。")
+
+run_clicked = st.button("运行分析", type="primary")
+
+if run_clicked:
     if not covariates:
-        st.error("请至少选择一个 covariate。")
-        st.stop()
+        st.session_state.analysis_error = {"error": {"code": "invalid_input", "message": "请至少选择一个 covariate。"}}
+        st.session_state.analysis_payload = None
+    elif method == "did" and (not time_col or not group_col):
+        st.session_state.analysis_error = {
+            "error": {"code": "invalid_input", "message": "DID 需要选择 time_col 和 group_col。"}
+        }
+        st.session_state.analysis_payload = None
+    else:
+        files = {"file": (uploaded.name, io.BytesIO(file_bytes), "text/csv")}
+        data = {
+            "treatment_col": treatment_col,
+            "outcome_col": outcome_col,
+            "covariates": ",".join(covariates),
+        }
 
-    files = {"file": (uploaded.name, io.BytesIO(file_bytes), "text/csv")}
-    data = {
-        "treatment_col": treatment_col,
-        "outcome_col": outcome_col,
-        "covariates": ",".join(covariates),
-        "psm_caliper": str(psm_caliper),
-    }
-    if time_col:
-        data["time_col"] = time_col
-    if group_col:
-        data["group_col"] = group_col
+        if method == "did":
+            data["time_col"] = time_col
+            data["group_col"] = group_col
+        else:
+            data["psm_caliper"] = str(psm_caliper)
 
-    try:
-        with st.spinner("调用后端分析中..."):
-            response = requests.post(f"{api_base}/analyze/{method}", files=files, data=data, timeout=120)
+        try:
+            with st.spinner("调用后端分析中..."):
+                response = requests.post(f"{api_base}/analyze/{method}", files=files, data=data, timeout=120)
+            if response.status_code == 200:
+                st.session_state.analysis_payload = response.json()
+                st.session_state.analysis_error = None
+            else:
+                st.session_state.analysis_payload = None
+                st.session_state.analysis_error = response.json()
+        except requests.RequestException as exc:
+            st.session_state.analysis_payload = None
+            st.session_state.analysis_error = {"error": {"code": "request_exception", "message": str(exc)}}
 
-        if response.status_code != 200:
-            payload = response.json()
-            st.error(f"分析失败：{payload.get('error', {}).get('code', 'unknown_error')}")
-            st.json(payload)
-            st.stop()
+st.markdown("---")
+st.subheader("分析结果")
 
-        payload = response.json()
-        st.success("分析完成")
+left, right = st.columns([1, 1])
+with left:
+    st.markdown("#### 核心结果（JSON）")
+    if st.session_state.analysis_payload:
+        st.json(st.session_state.analysis_payload.get("result", {}))
+    else:
+        st.info("尚无成功结果。")
 
-        st.subheader("结果 JSON")
-        st.json(payload.get("result", {}))
+with right:
+    st.markdown("#### 错误提示")
+    if st.session_state.analysis_error:
+        err = st.session_state.analysis_error.get("error", {})
+        st.error(f"{err.get('code', 'unknown_error')}: {err.get('message', '未知错误')}")
+        st.json(st.session_state.analysis_error)
+    else:
+        st.success("当前无错误。")
 
-        st.subheader("Markdown 报告")
-        st.markdown(payload.get("report_markdown", ""))
-
-    except requests.RequestException as exc:
-        st.error(f"请求后端失败：{exc}")
-        st.info("请确认 FastAPI 服务已启动，并且 API Base URL 可访问。")
+st.markdown("#### Markdown 报告")
+if st.session_state.analysis_payload:
+    report_markdown = st.session_state.analysis_payload.get("report_markdown", "")
+    st.markdown(report_markdown)
+    st.download_button(
+        "下载 Markdown 报告",
+        data=report_markdown,
+        file_name=f"causal_report_{method}.md",
+        mime="text/markdown",
+    )
+else:
+    st.info("运行成功后将在此展示报告，并可下载 Markdown 文件。")

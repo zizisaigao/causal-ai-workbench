@@ -134,7 +134,14 @@ streamlit run streamlit_app.py
 - `did`
 - `psm`（支持 `psm_caliper` 参数）
 
-页面能力：上传 CSV、选择 treatment/outcome/covariates、可选选择 time/group、调用后端并展示 JSON 结果与 markdown 报告。
+页面交互能力：
+- 上传 CSV 后自动读取列名，以下拉框选择 `treatment_col`、`outcome_col`、`time_col`、`group_col`
+- `covariates` 使用多选框
+- 动态参数区：
+  - `did` 显示 `time_col`、`group_col`
+  - `psm` 显示 `psm_caliper`
+- 结果区分开展示：核心结果（JSON）、markdown 报告、错误提示
+- 支持下载 markdown 报告
 
 ## 运行测试
 在项目根目录执行：
