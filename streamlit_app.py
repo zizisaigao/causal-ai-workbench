@@ -34,7 +34,7 @@ st.subheader("数据预览")
 st.dataframe(df.head(20), use_container_width=True)
 
 columns = df.columns.tolist()
-method = st.selectbox("分析方法", ["did", "psm", "uplift"])
+method = st.selectbox("分析方法", ["did", "psm", "uplift", "causal_forest"])
 
 col1, col2 = st.columns(2)
 with col1:
@@ -50,6 +50,8 @@ time_col = ""
 group_col = ""
 psm_caliper = 1.0
 uplift_buckets = 5
+cf_n_estimators = 200
+cf_min_samples_leaf = 5
 
 if method == "did":
     p1, p2 = st.columns(2)
@@ -65,9 +67,18 @@ if method == "did":
 elif method == "psm":
     psm_caliper = st.number_input("psm_caliper", min_value=0.000001, value=1.0, step=0.1, format="%.6f")
     st.caption("PSM 可能因样本重叠不足失败；可适当提高 caliper。")
-else:
+elif method == "uplift":
     uplift_buckets = st.selectbox("uplift_buckets", [5, 10], index=0)
     st.caption("Uplift 会输出样本排序分数与分桶统计，用于干预优先级建议。")
+else:
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        uplift_buckets = st.selectbox("cf_buckets", [5, 10], index=0)
+    with c2:
+        cf_n_estimators = st.number_input("cf_n_estimators", min_value=50, value=200, step=50)
+    with c3:
+        cf_min_samples_leaf = st.number_input("cf_min_samples_leaf", min_value=1, value=5, step=1)
+    st.caption("Causal Forest 优先使用 econml；若不可用会自动降级到近似方法。")
 
 run_clicked = st.button("运行分析", type="primary")
 
@@ -93,8 +104,12 @@ if run_clicked:
             data["group_col"] = group_col
         elif method == "psm":
             data["psm_caliper"] = str(psm_caliper)
+        elif method == "uplift":
+            data["uplift_buckets"] = str(uplift_buckets)
         else:
             data["uplift_buckets"] = str(uplift_buckets)
+            data["cf_n_estimators"] = str(cf_n_estimators)
+            data["cf_min_samples_leaf"] = str(cf_min_samples_leaf)
 
         try:
             with st.spinner("调用后端分析中..."):
@@ -142,15 +157,18 @@ if st.session_state.analysis_payload:
 else:
     st.info("运行成功后将在此展示报告，并可下载 Markdown 文件。")
 
-if st.session_state.analysis_payload and method == "uplift":
+if st.session_state.analysis_payload and method in {"uplift", "causal_forest"}:
     diagnostics = st.session_state.analysis_payload.get("result", {}).get("diagnostics", {})
 
-    st.markdown("#### Uplift 样本排序预览")
-    preview_rows = diagnostics.get("sample_uplift_scores_preview", [])
+    st.markdown("#### 异质性样本排序预览")
+    preview_rows = diagnostics.get("sample_uplift_scores_preview", diagnostics.get("sample_effect_scores_preview", []))
     if preview_rows:
         st.dataframe(pd.DataFrame(preview_rows), use_container_width=True)
 
-    st.markdown("#### Uplift 分桶结果")
+    st.markdown("#### 分桶结果")
     bucket_rows = diagnostics.get("bucket_summary", [])
     if bucket_rows:
         st.dataframe(pd.DataFrame(bucket_rows), use_container_width=True)
+
+    st.markdown("#### Top 人群摘要")
+    st.json(diagnostics.get("top_segment_profile_mean", {}))

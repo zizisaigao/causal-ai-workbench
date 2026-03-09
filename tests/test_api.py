@@ -62,3 +62,24 @@ def test_uplift_analysis_success():
     assert body['result']['method'] == 'uplift'
     assert 'bucket_summary' in body['result']['diagnostics']
     assert 'top_segment_profile_mean' in body['result']['diagnostics']
+
+
+def test_causal_forest_analysis_success():
+    with open('data/sample/hillstrom_style_sample.csv', 'rb') as f:
+        response = client.post(
+            '/api/analyze/causal_forest',
+            files={'file': ('hillstrom_style_sample.csv', f, 'text/csv')},
+            data={
+                'treatment_col': 'treatment',
+                'outcome_col': 'outcome',
+                'covariates': 'age,income,prior_spend',
+                'uplift_buckets': '5',
+                'cf_n_estimators': '50',
+                'cf_min_samples_leaf': '2',
+            },
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body['result']['method'] == 'causal_forest'
+    assert 'bucket_summary' in body['result']['diagnostics']
+    assert 'implementation' in body['result']['diagnostics']

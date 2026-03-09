@@ -11,10 +11,32 @@ DISCLAIMER = (
 )
 
 
-UPLIFT_DISCLAIMER = (
-    "⚠️ **Uplift 说明**：以下排序用于干预优先级建议，"
+RANKING_DISCLAIMER = (
+    "⚠️ **排序说明**：以下分数主要用于干预优先级建议，"
     "不等于严格无偏的个体因果效应（ITE）。"
 )
+
+
+def _append_heterogeneity_section(lines: list[str], result: CausalEstimate) -> None:
+    method_title = "Uplift" if result.method == "uplift" else "Causal Forest"
+    lines.append(f"## {method_title} Method Notes")
+    if result.method == "uplift":
+        lines.append("- 基于 transformed outcome + RandomForest 进行异质性排序。")
+    else:
+        lines.append("- 优先使用 CausalForestDML 估计 CATE；不可用时降级到 transformed outcome RF。")
+    lines.append("- 适合回答“哪些人更值得优先干预”。")
+    lines.append(RANKING_DISCLAIMER)
+    lines.append("")
+
+    top_profile = result.diagnostics.get("top_segment_profile_mean", {})
+    top_preview = result.diagnostics.get("top_uplift_preview", result.diagnostics.get("top_effect_preview", []))
+
+    lines.append("## Suggested Priority Segment")
+    if top_preview:
+        lines.append("- 预测增益/效应最高的 Top 人群（预览）可优先纳入干预。")
+    if top_profile:
+        lines.append(f"- Top 人群特征均值画像：`{top_profile}`")
+    lines.append("")
 
 
 def generate_markdown_report(result: CausalEstimate) -> str:
@@ -35,22 +57,8 @@ def generate_markdown_report(result: CausalEstimate) -> str:
     lines.extend([f"- {x}" for x in result.limitations])
     lines.append("")
 
-    if result.method == "uplift":
-        lines.append("## Uplift Method Notes")
-        lines.append("- 基于 transformed outcome + RandomForest 进行异质性排序。")
-        lines.append("- 适合回答“哪些人更值得优先干预”。")
-        lines.append(UPLIFT_DISCLAIMER)
-        lines.append("")
-
-        top_preview = result.diagnostics.get("top_uplift_preview", [])
-        top_profile = result.diagnostics.get("top_segment_profile_mean", {})
-
-        lines.append("## Suggested Priority Segment")
-        if top_preview:
-            lines.append("- 预测 uplift 最高的 Top 人群样本（预览）可优先纳入干预。")
-        if top_profile:
-            lines.append(f"- Top 人群特征均值画像：`{top_profile}`")
-        lines.append("")
+    if result.method in {"uplift", "causal_forest"}:
+        _append_heterogeneity_section(lines, result)
 
     lines.append("## Diagnostics")
     for k, v in result.diagnostics.items():

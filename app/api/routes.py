@@ -48,6 +48,8 @@ async def run_analysis(
     cutoff: float | None = Form(default=None),
     psm_caliper: float = Form(default=0.5),
     uplift_buckets: int = Form(default=5),
+    cf_n_estimators: int = Form(default=200),
+    cf_min_samples_leaf: int = Form(default=5),
 ) -> AnalyzeResponse:
     df = pd.read_csv(file.file)
     covariate_cols = [c.strip() for c in covariates.split(",") if c.strip()]
@@ -69,6 +71,8 @@ async def run_analysis(
         payload=analysis_input,
         psm_caliper=psm_caliper,
         uplift_buckets=uplift_buckets,
+        cf_n_estimators=cf_n_estimators,
+        cf_min_samples_leaf=cf_min_samples_leaf,
     )
     report = generate_markdown_report(result)
     return AnalyzeResponse(result=result.__dict__, report_markdown=report)

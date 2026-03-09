@@ -1,6 +1,7 @@
 import pandas as pd
 
 from app.causal.base import CausalAnalysisInput
+from app.causal.causal_forest import CausalForestEstimator
 from app.causal.psm import PSMEstimator
 from app.causal.uplift import UpliftEstimator
 
@@ -41,3 +42,16 @@ def test_uplift_runs():
     assert isinstance(result.diagnostics.get('sample_uplift_scores_preview'), list)
     assert isinstance(result.diagnostics.get('bucket_summary'), list)
     assert result.diagnostics.get('n_buckets') == 5
+
+
+def test_causal_forest_runs_with_fallback_or_econml():
+    payload = CausalAnalysisInput(
+        data=_toy_data(),
+        treatment_col='treatment',
+        outcome_col='outcome',
+        covariate_cols=['x1', 'x2'],
+    )
+    result = CausalForestEstimator(n_estimators=50, min_samples_leaf=2, n_buckets=5).fit(payload)
+    assert result.method == 'causal_forest'
+    assert 'implementation' in result.diagnostics
+    assert isinstance(result.diagnostics.get('bucket_summary'), list)
