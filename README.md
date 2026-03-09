@@ -117,6 +117,25 @@ curl -X POST http://127.0.0.1:8000/api/analyze/psm \
   -F "psm_caliper=1.0"
 ```
 
+## Streamlit Demo 页面（最小版）
+1) 启动 FastAPI（后端）
+```bash
+uvicorn app.main:app --reload
+```
+
+2) 新开终端启动 Streamlit（前端）
+```bash
+streamlit run streamlit_app.py
+```
+
+3) 打开页面（默认）：`http://localhost:8501`
+
+当前页面支持方法：
+- `did`
+- `psm`（支持 `psm_caliper` 参数）
+
+页面能力：上传 CSV、选择 treatment/outcome/covariates、可选选择 time/group、调用后端并展示 JSON 结果与 markdown 报告。
+
 ## 运行测试
 在项目根目录执行：
 ```bash
