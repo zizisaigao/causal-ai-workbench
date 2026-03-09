@@ -43,6 +43,23 @@ class AnalyzeResponse(BaseModel):
     llm_explanation: dict[str, Any] | None = None
 
 
+
+
+class FieldDetectionResponse(BaseModel):
+    defaults: dict[str, Any]
+    candidates: dict[str, list[str]]
+    notes: list[str]
+
+
+class AutoAnalyzeResponse(BaseModel):
+    detected_fields: FieldDetectionResponse
+    recommended_method: str
+    recommendation_rationale: list[str]
+    recommendation_limitations: list[str]
+    analysis_result: AnalyzeResultResponse
+    report_markdown: str
+    llm_explanation: dict[str, Any] | None = None
+
 class DataSummaryResponse(BaseModel):
     n_rows: int
     n_cols: int

@@ -152,6 +152,23 @@ streamlit run streamlit_app.py
 - uplift / causal_forest 场景额外展示：样本排序预览、分桶统计表、Top 人群摘要
 - 支持下载 markdown 报告
 
+
+## 自动字段识别 + 方法推荐 + 一键分析
+新增 API：
+- `POST /api/fields/detect`：自动识别关键字段候选与默认值
+- `POST /api/auto/analyze`：自动识别字段 -> 推荐方法 -> 一键运行并返回结果/报告/LLM解释
+
+`/api/auto/analyze` 返回关键字段：
+- `detected_fields`
+- `recommended_method`
+- `recommendation_rationale`
+- `recommendation_limitations`
+- `analysis_result`
+- `report_markdown`
+- `llm_explanation`
+
+Streamlit 中已支持：上传后自动预填字段、显示推荐方法与原因、点击“Run Recommended Analysis”一键分析。
+
 ## LLM 解释助手（仅解释，不参与估计）
 项目新增了 LLM explanation 层：在分析完成后，基于已有结构化结果生成更自然的解释。
 

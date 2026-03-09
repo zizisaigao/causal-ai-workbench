@@ -7,11 +7,20 @@ from pathlib import Path
 import pandas as pd
 from fastapi import APIRouter, File, Form, UploadFile
 
-from app.api.schemas import AnalyzeResponse, DataSummaryResponse, MethodRecommendationResponse, RecommendRequest
+from app.api.schemas import (
+    AnalyzeResponse,
+    AutoAnalyzeResponse,
+    DataSummaryResponse,
+    FieldDetectionResponse,
+    MethodRecommendationResponse,
+    RecommendRequest,
+)
 from app.causal.base import CausalAnalysisInput
 from app.reporting.report_generator import generate_markdown_report
 from app.services.analysis_service import run_causal_analysis
+from app.services.auto_analysis_service import run_auto_analysis
 from app.services.data_service import summarize_dataframe
+from app.services.field_detection_service import detect_fields
 from app.services.llm_explainer import generate_llm_explanation
 from app.services.recommendation_service import recommend_methods
 
@@ -30,10 +39,51 @@ async def data_summary(file: UploadFile = File(...)) -> DataSummaryResponse:
     return DataSummaryResponse(**summary.__dict__)
 
 
+@router.post("/fields/detect", response_model=FieldDetectionResponse)
+async def detect_fields_route(file: UploadFile = File(...)) -> FieldDetectionResponse:
+    df = pd.read_csv(file.file)
+    detected = detect_fields(df)
+    return FieldDetectionResponse(defaults=detected.defaults, candidates=detected.candidates, notes=detected.notes)
+
+
 @router.post("/methods/recommend", response_model=MethodRecommendationResponse)
 def methods_recommend(payload: RecommendRequest) -> MethodRecommendationResponse:
     rec = recommend_methods(**payload.model_dump())
     return MethodRecommendationResponse(**rec.__dict__)
+
+
+@router.post("/auto/analyze", response_model=AutoAnalyzeResponse)
+async def auto_analyze(
+    file: UploadFile = File(...),
+    cutoff: float | None = Form(default=None),
+    include_llm_explanation: bool = Form(default=True),
+) -> AutoAnalyzeResponse:
+    df = pd.read_csv(file.file)
+    out = run_auto_analysis(df=df, cutoff=cutoff, include_llm_explanation=include_llm_explanation)
+
+    report = generate_markdown_report(out.analysis_result)
+    llm_explanation = None
+    if include_llm_explanation:
+        llm_explanation = generate_llm_explanation(
+            method=out.recommended_method,
+            result=out.analysis_result.__dict__,
+            analysis_context={
+                "detected_fields": out.detected_fields,
+                "recommended_method": out.recommended_method,
+                "recommendation_rationale": out.recommendation_rationale,
+                "recommendation_limitations": out.recommendation_limitations,
+            },
+        )
+
+    return AutoAnalyzeResponse(
+        detected_fields=out.detected_fields,
+        recommended_method=out.recommended_method,
+        recommendation_rationale=out.recommendation_rationale,
+        recommendation_limitations=out.recommendation_limitations,
+        analysis_result=out.analysis_result.__dict__,
+        report_markdown=report,
+        llm_explanation=llm_explanation,
+    )
 
 
 @router.post("/analyze/{method}", response_model=AnalyzeResponse)

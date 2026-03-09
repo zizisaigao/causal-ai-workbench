@@ -54,6 +54,25 @@ def _append_iv_section(lines: list[str]) -> None:
     lines.append("")
 
 
+
+
+def _append_auto_recommendation_section(lines: list[str], result: CausalEstimate) -> None:
+    rec_method = result.diagnostics.get("recommended_method")
+    if not rec_method:
+        return
+    lines.append("## Auto Detection & Recommendation")
+    lines.append(f"- Recommended method: `{rec_method}`")
+    defaults = result.diagnostics.get("detected_field_defaults")
+    if defaults:
+        lines.append(f"- Detected key fields: `{defaults}`")
+    rationale = result.diagnostics.get("recommendation_rationale")
+    if rationale:
+        lines.append(f"- Recommendation rationale: `{rationale}`")
+    limits = result.diagnostics.get("recommendation_limitations")
+    if limits:
+        lines.append(f"- Recommendation limitations: `{limits}`")
+    lines.append("")
+
 def generate_markdown_report(result: CausalEstimate) -> str:
     lines = [
         f"# Causal Analysis Report - {result.method.upper()}",
@@ -74,6 +93,7 @@ def generate_markdown_report(result: CausalEstimate) -> str:
 
     if result.method in {"uplift", "causal_forest"}:
         _append_heterogeneity_section(lines, result)
+    _append_auto_recommendation_section(lines, result)
     if result.method == "rdd":
         _append_rdd_section(lines)
     if result.method == "iv":
