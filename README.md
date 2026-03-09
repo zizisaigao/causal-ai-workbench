@@ -86,13 +86,14 @@ curl -X POST http://127.0.0.1:8000/api/methods/recommend \
   -d '{"has_time": false, "has_group": false, "treatment_binary": true, "observational": true, "wants_targeting": false}'
 ```
 
-3) 执行 PSM 并生成报告
+3) 执行 PSM 并生成报告（示例里显式放宽 `psm_caliper`，避免小样本无匹配）
 ```bash
 curl -X POST http://127.0.0.1:8000/api/analyze/psm \
   -F "file=@data/sample/hillstrom_style_sample.csv" \
   -F "treatment_col=treatment" \
   -F "outcome_col=outcome" \
-  -F "covariates=age,income,prior_spend"
+  -F "covariates=age,income,prior_spend" \
+  -F "psm_caliper=1.0"
 ```
 
 ## 运行测试

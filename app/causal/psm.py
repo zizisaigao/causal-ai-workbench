@@ -10,10 +10,14 @@ from sklearn.neighbors import NearestNeighbors
 from .base import BaseCausalEstimator, CausalAnalysisInput, CausalEstimate
 
 
+class PSMNoMatchError(ValueError):
+    """Raised when no matched pairs are found under current matching settings."""
+
+
 class PSMEstimator(BaseCausalEstimator):
     method_name = "psm"
 
-    def __init__(self, caliper: float = 0.1):
+    def __init__(self, caliper: float = 0.5):
         self.caliper = caliper
 
     def fit(self, payload: CausalAnalysisInput) -> CausalEstimate:
@@ -43,7 +47,11 @@ class PSMEstimator(BaseCausalEstimator):
 
         within_caliper = distances.flatten() <= self.caliper
         if not within_caliper.any():
-            raise ValueError("No matched pairs found within caliper. Try a larger caliper.")
+            raise PSMNoMatchError(
+                "No matched pairs found for PSM under current caliper. "
+                "Possible reasons: sample size is too small, treatment/control propensity overlap is weak, "
+                "or caliper is too strict. Try a larger caliper (for example 0.5 or 1.0)."
+            )
 
         matched_treated = treated_outcomes[within_caliper]
         matched_control = control_outcomes[indices.flatten()[within_caliper]]

@@ -36,6 +36,7 @@ def test_end_to_end_psm_flow():
                 "treatment_col": "treatment",
                 "outcome_col": "outcome",
                 "covariates": "age,income,prior_spend",
+                "psm_caliper": "1.0",
             },
         )
     assert analyze_resp.status_code == 200
@@ -54,7 +55,26 @@ def test_unsupported_method_returns_unified_error():
                 "treatment_col": "treatment",
                 "outcome_col": "outcome",
                 "covariates": "age,income,prior_spend",
+                "psm_caliper": "1.0",
             },
         )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "unsupported_method"
+
+
+def test_psm_no_match_returns_business_error():
+    with SAMPLE.open("rb") as f:
+        resp = client.post(
+            "/api/analyze/psm",
+            files={"file": (SAMPLE.name, f, "text/csv")},
+            data={
+                "treatment_col": "treatment",
+                "outcome_col": "outcome",
+                "covariates": "age,income,prior_spend",
+                "psm_caliper": "0.000001",
+            },
+        )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "psm_no_matches"
+    assert "sample size is too small" in body["error"]["message"]
