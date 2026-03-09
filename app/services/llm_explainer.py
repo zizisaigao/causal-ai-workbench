@@ -7,9 +7,31 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import urllib.error
 import urllib.request
 from typing import Any
+
+
+DEFAULT_LLM_TIMEOUT_SECONDS = 120.0
+
+
+class LLMError(RuntimeError):
+    """Structured LLM integration error for deterministic fallback reasons."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _llm_timeout_seconds() -> float:
+    raw = os.getenv("LLM_TIMEOUT_SECONDS", str(DEFAULT_LLM_TIMEOUT_SECONDS)).strip()
+    try:
+        value = float(raw)
+        return value if value > 0 else DEFAULT_LLM_TIMEOUT_SECONDS
+    except ValueError:
+        return DEFAULT_LLM_TIMEOUT_SECONDS
 
 
 def _method_specific_caveat(method: str) -> str:
@@ -73,16 +95,30 @@ def _http_post_json(url: str, payload: dict[str, Any], headers: dict[str, str]) 
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=45) as resp:  # nosec - controlled URL via env
+        with urllib.request.urlopen(req, timeout=_llm_timeout_seconds()) as resp:  # nosec - controlled URL via env
             return json.loads(resp.read().decode("utf-8"))
+    except TimeoutError as exc:
+        raise LLMError("timeout", f"request timed out after {_llm_timeout_seconds()}s") from exc
+    except socket.timeout as exc:
+        raise LLMError("timeout", f"request timed out after {_llm_timeout_seconds()}s") from exc
+    except urllib.error.HTTPError as exc:
+        body = ""
+        try:
+            body = exc.read().decode("utf-8")[:300]
+        except Exception:  # pragma: no cover
+            body = ""
+        raise LLMError("model_response_error", f"HTTP {exc.code}: {body or exc.reason}") from exc
     except urllib.error.URLError as exc:
-        raise RuntimeError(str(exc)) from exc
+        reason = exc.reason
+        if isinstance(reason, TimeoutError | socket.timeout):
+            raise LLMError("timeout", f"request timed out after {_llm_timeout_seconds()}s") from exc
+        raise LLMError("connection_failed", f"unable to connect to LLM endpoint: {reason}") from exc
 
 
 def _call_openai(prompt: str) -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not set")
+        raise LLMError("config_missing", "OPENAI_API_KEY not set")
 
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -98,22 +134,30 @@ def _call_openai(prompt: str) -> dict[str, Any]:
         },
         headers={"Authorization": f"Bearer {api_key}"},
     )
-    content = body["choices"][0]["message"]["content"]
-    return json.loads(content)
+    try:
+        content = body["choices"][0]["message"]["content"]
+        return json.loads(content)
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+        raise LLMError("model_response_error", f"invalid OpenAI response schema: {exc}") from exc
 
 
 def _call_ollama(prompt: str) -> dict[str, Any]:
     model = os.getenv("OLLAMA_MODEL")
     if not model:
-        raise RuntimeError("OLLAMA_MODEL not set")
+        raise LLMError("config_missing", "OLLAMA_MODEL not set")
     base_url = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     body = _http_post_json(
         f"{base_url.rstrip('/')}/api/generate",
         payload={"model": model, "prompt": prompt, "stream": False, "format": "json"},
         headers={},
     )
-    content = body.get("response", "{}")
-    return json.loads(content)
+    content = body.get("response")
+    if content is None:
+        raise LLMError("model_response_error", "missing `response` field in Ollama output")
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise LLMError("model_response_error", f"invalid JSON payload from Ollama model: {exc}") from exc
 
 
 def generate_llm_explanation(method: str, result: dict[str, Any], analysis_context: dict[str, Any]) -> dict[str, Any]:
@@ -128,6 +172,8 @@ def generate_llm_explanation(method: str, result: dict[str, Any], analysis_conte
             parsed = _call_ollama(prompt)
             parsed["mode"] = "llm_ollama"
             return parsed
-        return _template_explanation(method, result, analysis_context, reason="No LLM credentials/config found")
-    except Exception as exc:
-        return _template_explanation(method, result, analysis_context, reason=f"LLM unavailable: {exc}")
+        return _template_explanation(method, result, analysis_context, reason="config_missing: no LLM credentials/config found")
+    except LLMError as exc:
+        return _template_explanation(method, result, analysis_context, reason=f"{exc.code}: {exc.message}")
+    except Exception as exc:  # pragma: no cover
+        return _template_explanation(method, result, analysis_context, reason=f"model_response_error: unexpected error: {exc}")
