@@ -12,6 +12,7 @@ from app.causal.base import CausalAnalysisInput
 from app.reporting.report_generator import generate_markdown_report
 from app.services.analysis_service import run_causal_analysis
 from app.services.data_service import summarize_dataframe
+from app.services.llm_explainer import generate_llm_explanation
 from app.services.recommendation_service import recommend_methods
 
 router = APIRouter()
@@ -52,6 +53,7 @@ async def run_analysis(
     cf_min_samples_leaf: int = Form(default=5),
     rdd_bandwidth: float | None = Form(default=None),
     instrument_col: str | None = Form(default=None),
+    include_llm_explanation: bool = Form(default=True),
 ) -> AnalyzeResponse:
     df = pd.read_csv(file.file)
     covariate_cols = [c.strip() for c in covariates.split(",") if c.strip()]
@@ -79,4 +81,22 @@ async def run_analysis(
         rdd_bandwidth=rdd_bandwidth,
     )
     report = generate_markdown_report(result)
-    return AnalyzeResponse(result=result.__dict__, report_markdown=report)
+
+    llm_explanation = None
+    if include_llm_explanation:
+        llm_explanation = generate_llm_explanation(
+            method=method,
+            result=result.__dict__,
+            analysis_context={
+                "treatment_col": treatment_col,
+                "outcome_col": outcome_col,
+                "covariates": covariate_cols,
+                "time_col": time_col,
+                "group_col": group_col,
+                "running_col": running_col,
+                "cutoff": cutoff,
+                "instrument_col": instrument_col,
+            },
+        )
+
+    return AnalyzeResponse(result=result.__dict__, report_markdown=report, llm_explanation=llm_explanation)

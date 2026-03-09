@@ -60,6 +60,7 @@ def test_uplift_analysis_success():
     assert response.status_code == 200
     body = response.json()
     assert body['result']['method'] == 'uplift'
+    assert 'llm_explanation' in body
     assert 'bucket_summary' in body['result']['diagnostics']
     assert 'top_segment_profile_mean' in body['result']['diagnostics']
 

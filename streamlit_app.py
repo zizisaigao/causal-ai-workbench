@@ -185,6 +185,36 @@ if st.session_state.analysis_payload:
 else:
     st.info("运行成功后将在此展示报告，并可下载 Markdown 文件。")
 
+
+st.markdown("#### AI Explanation")
+if st.session_state.analysis_payload:
+    llm_exp = st.session_state.analysis_payload.get("llm_explanation")
+    if llm_exp:
+        mode = llm_exp.get("mode", "unknown")
+        if mode == "template":
+            st.info(f"当前使用模板化解释（{llm_exp.get('fallback_reason', 'no llm')}）。")
+        else:
+            st.success(f"当前使用 LLM 解释模式：{mode}")
+
+        st.markdown(f"**Executive Summary**\n\n{llm_exp.get('executive_summary', '')}")
+        st.markdown(f"**Method Why**\n\n{llm_exp.get('method_why', '')}")
+
+        st.markdown("**Key Findings**")
+        for item in llm_exp.get("key_findings", []):
+            st.markdown(f"- {item}")
+
+        st.markdown("**Caveats**")
+        for item in llm_exp.get("caveats", []):
+            st.markdown(f"- {item}")
+
+        st.markdown("**Business Takeaways**")
+        for item in llm_exp.get("business_takeaways", []):
+            st.markdown(f"- {item}")
+    else:
+        st.info("本次未返回 AI Explanation。")
+else:
+    st.info("运行成功后将在此展示 AI Explanation。")
+
 if st.session_state.analysis_payload and method in {"uplift", "causal_forest"}:
     diagnostics = st.session_state.analysis_payload.get("result", {}).get("diagnostics", {})
 

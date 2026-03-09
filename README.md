@@ -152,6 +152,40 @@ streamlit run streamlit_app.py
 - uplift / causal_forest 场景额外展示：样本排序预览、分桶统计表、Top 人群摘要
 - 支持下载 markdown 报告
 
+## LLM 解释助手（仅解释，不参与估计）
+项目新增了 LLM explanation 层：在分析完成后，基于已有结构化结果生成更自然的解释。
+
+职责边界：
+- ✅ LLM 只做解释、总结、方法说明和业务建议
+- ❌ LLM 不参与 DID/PSM/Uplift/CausalForest/RDD/IV 的核心统计估计
+
+环境变量配置（二选一）：
+1) OpenAI 兼容接口
+```bash
+export OPENAI_API_KEY=your_key
+export OPENAI_MODEL=gpt-4o-mini
+# 可选
+export OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+2) 本地 Ollama
+```bash
+export OLLAMA_MODEL=qwen2.5:7b
+# 可选
+export OLLAMA_BASE_URL=http://127.0.0.1:11434
+```
+
+未配置时的降级行为：
+- 自动返回模板化解释（`mode=template`），主分析流程不受影响。
+- Streamlit 页面会提示“当前使用模板化解释”。
+
+LLM 返回结构（示例字段）：
+- `executive_summary`
+- `method_why`
+- `key_findings`
+- `caveats`
+- `business_takeaways`
+
 ## 运行测试
 在项目根目录执行：
 ```bash

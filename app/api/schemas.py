@@ -40,6 +40,7 @@ class AnalyzeResponse(BaseModel):
     status: Literal["success"] = "success"
     result: AnalyzeResultResponse
     report_markdown: str
+    llm_explanation: dict[str, Any] | None = None
 
 
 class DataSummaryResponse(BaseModel):
