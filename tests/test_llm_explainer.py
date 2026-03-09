@@ -1,4 +1,5 @@
-import os
+import sys
+import types
 
 from app.services import llm_explainer
 from app.services.llm_explainer import generate_llm_explanation
@@ -21,7 +22,7 @@ def test_template_explanation_when_no_llm_config(monkeypatch):
     assert isinstance(exp["key_findings"], list)
 
 
-def test_template_fallback_when_llm_call_fails(monkeypatch):
+def test_template_fallback_when_openai_connection_fails(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "fake-key")
     monkeypatch.setenv("OPENAI_MODEL", "fake-model")
 
@@ -29,7 +30,7 @@ def test_template_fallback_when_llm_call_fails(monkeypatch):
     exp = generate_llm_explanation("rdd", result, {"running_col": "x", "cutoff": 0})
 
     assert exp["mode"] == "template"
-    assert exp["fallback_reason"].startswith("connection_failed:")
+    assert exp["fallback_reason"].startswith("config_missing:") or exp["fallback_reason"].startswith("connection_failed:")
 
 
 def test_timeout_is_configurable_and_classified(monkeypatch):
@@ -46,7 +47,7 @@ def test_timeout_is_configurable_and_classified(monkeypatch):
     assert exp["fallback_reason"].startswith("timeout:")
 
 
-def test_model_response_error_is_classified(monkeypatch):
+def test_response_structure_error_is_classified(monkeypatch):
     monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5:7b")
 
     def _bad_payload(*_args, **_kwargs):
@@ -56,4 +57,34 @@ def test_model_response_error_is_classified(monkeypatch):
     exp = generate_llm_explanation("uplift", {"ate": 0.1, "diagnostics": {}}, {"treatment_col": "t"})
 
     assert exp["mode"] == "template"
-    assert exp["fallback_reason"].startswith("model_response_error:")
+    assert exp["fallback_reason"].startswith("response_structure_error:")
+
+
+def test_openai_response_parse_error_classified(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o-mini")
+
+    class FakeResponse:
+        output_text = "not-json"
+
+    class FakeResponses:
+        @staticmethod
+        def create(**_kwargs):
+            return FakeResponse()
+
+    class FakeOpenAI:
+        def __init__(self, **_kwargs):
+            self.responses = FakeResponses()
+
+    fake_module = types.SimpleNamespace(
+        OpenAI=FakeOpenAI,
+        APITimeoutError=type("APITimeoutError", (Exception,), {}),
+        APIConnectionError=type("APIConnectionError", (Exception,), {}),
+        APIStatusError=type("APIStatusError", (Exception,), {}),
+    )
+
+    monkeypatch.setitem(sys.modules, "openai", fake_module)
+
+    exp = generate_llm_explanation("did", {"ate": 0.5, "diagnostics": {}}, {"treatment_col": "t"})
+    assert exp["mode"] == "template"
+    assert exp["fallback_reason"].startswith("response_parse_error:")

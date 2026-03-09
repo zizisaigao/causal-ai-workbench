@@ -206,8 +206,30 @@ Ollama 本地模型提示：
 `fallback_reason` 分类（模板降级时）：
 - `config_missing: ...`：未配置 OpenAI/Ollama 所需环境变量
 - `connection_failed: ...`：无法连接 LLM 服务（地址/端口/服务未启动）
+- `http_error: ...`：服务返回非 200（包含 status 与 body 预览）
 - `timeout: ...`：请求超时（常见于本地 Ollama 首次加载较慢）
-- `model_response_error: ...`：模型返回格式异常或解析失败
+- `response_parse_error: ...`：返回文本不是合法 JSON
+- `response_structure_error: ...`：响应结构异常（缺少关键字段）
+
+
+
+OpenAI 最小 smoke test（直连官方）：
+```bash
+export OPENAI_API_KEY=your_key
+export OPENAI_MODEL=gpt-4o-mini
+# OPENAI_BASE_URL 默认可不设置（直连官方）
+
+python - <<'PY'
+from app.services.llm_explainer import generate_llm_explanation
+
+out = generate_llm_explanation(
+    method="did",
+    result={"ate": 0.12, "ci_low": 0.03, "ci_high": 0.21, "diagnostics": {"n_obs": 500}},
+    analysis_context={"treatment_col": "treatment", "outcome_col": "outcome", "time_col": "time", "group_col": "group"},
+)
+print(out["mode"], out.get("fallback_reason", "ok"))
+PY
+```
 
 LLM 返回结构（示例字段）：
 - `executive_summary`

@@ -107,7 +107,7 @@ def _http_post_json(url: str, payload: dict[str, Any], headers: dict[str, str]) 
             body = exc.read().decode("utf-8")[:300]
         except Exception:  # pragma: no cover
             body = ""
-        raise LLMError("model_response_error", f"HTTP {exc.code}: {body or exc.reason}") from exc
+        raise LLMError("http_error", f"status={exc.code}, body_preview={body or exc.reason}") from exc
     except urllib.error.URLError as exc:
         reason = exc.reason
         if isinstance(reason, TimeoutError | socket.timeout):
@@ -120,25 +120,53 @@ def _call_openai(prompt: str) -> dict[str, Any]:
     if not api_key:
         raise LLMError("config_missing", "OPENAI_API_KEY not set")
 
+    try:
+        from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
+    except ImportError as exc:  # pragma: no cover
+        raise LLMError("config_missing", "openai SDK not installed; run `pip install openai`") from exc
+
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-    body = _http_post_json(
-        f"{base_url.rstrip('/')}/chat/completions",
-        payload={
-            "model": model,
-            "messages": [
+    base_url = os.getenv("OPENAI_BASE_URL")
+    timeout = _llm_timeout_seconds()
+
+    client_kwargs: dict[str, Any] = {"api_key": api_key, "timeout": timeout}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+
+    try:
+        client = OpenAI(**client_kwargs)
+        response = client.responses.create(
+            model=model,
+            input=[
                 {"role": "system", "content": "You are a careful causal reporting assistant."},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.2,
-        },
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
+            temperature=0.2,
+        )
+    except APITimeoutError as exc:
+        raise LLMError("timeout", f"request timed out after {timeout}s") from exc
+    except APIConnectionError as exc:
+        raise LLMError("connection_failed", f"failed to reach OpenAI endpoint: {exc}") from exc
+    except APIStatusError as exc:
+        body_preview = ""
+        if getattr(exc, "response", None) is not None:
+            try:
+                body_preview = str(exc.response.text)[:200]
+            except Exception:  # pragma: no cover
+                body_preview = ""
+        raise LLMError("http_error", f"status={exc.status_code}, body_preview={body_preview or str(exc)}") from exc
+    except Exception as exc:
+        raise LLMError("response_parse_error", f"OpenAI request failed before parse: {exc}") from exc
+
+    output_text = getattr(response, "output_text", None)
+    if not output_text:
+        raise LLMError("response_structure_error", "OpenAI response missing output_text")
+
     try:
-        content = body["choices"][0]["message"]["content"]
-        return json.loads(content)
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
-        raise LLMError("model_response_error", f"invalid OpenAI response schema: {exc}") from exc
+        return json.loads(output_text)
+    except json.JSONDecodeError as exc:
+        preview = output_text[:200].replace("\n", " ")
+        raise LLMError("response_parse_error", f"model output is not valid JSON; preview={preview}; error={exc}") from exc
 
 
 def _call_ollama(prompt: str) -> dict[str, Any]:
@@ -153,11 +181,12 @@ def _call_ollama(prompt: str) -> dict[str, Any]:
     )
     content = body.get("response")
     if content is None:
-        raise LLMError("model_response_error", "missing `response` field in Ollama output")
+        raise LLMError("response_structure_error", "missing `response` field in Ollama output")
     try:
         return json.loads(content)
     except json.JSONDecodeError as exc:
-        raise LLMError("model_response_error", f"invalid JSON payload from Ollama model: {exc}") from exc
+        preview = content[:200].replace("\n", " ")
+        raise LLMError("response_parse_error", f"invalid JSON payload from Ollama; preview={preview}; error={exc}") from exc
 
 
 def generate_llm_explanation(method: str, result: dict[str, Any], analysis_context: dict[str, Any]) -> dict[str, Any]:
@@ -176,4 +205,4 @@ def generate_llm_explanation(method: str, result: dict[str, Any], analysis_conte
     except LLMError as exc:
         return _template_explanation(method, result, analysis_context, reason=f"{exc.code}: {exc.message}")
     except Exception as exc:  # pragma: no cover
-        return _template_explanation(method, result, analysis_context, reason=f"model_response_error: unexpected error: {exc}")
+        return _template_explanation(method, result, analysis_context, reason=f"response_structure_error: unexpected error: {exc}")
