@@ -3,6 +3,8 @@ import pandas as pd
 from app.causal.base import CausalAnalysisInput
 from app.causal.causal_forest import CausalForestEstimator
 from app.causal.psm import PSMEstimator
+from app.causal.iv import IVEstimator
+from app.causal.rdd import RDDEstimator
 from app.causal.uplift import UpliftEstimator
 
 
@@ -55,3 +57,34 @@ def test_causal_forest_runs_with_fallback_or_econml():
     assert result.method == 'causal_forest'
     assert 'implementation' in result.diagnostics
     assert isinstance(result.diagnostics.get('bucket_summary'), list)
+
+
+def test_rdd_runs():
+    df = _toy_data().copy()
+    df['running'] = [0.1, 0.2, 0.3, -0.1, -0.2, -0.3, 0.4, -0.4]
+    payload = CausalAnalysisInput(
+        data=df,
+        treatment_col='treatment',
+        outcome_col='outcome',
+        covariate_cols=['x1', 'x2'],
+        running_col='running',
+        cutoff=0.0,
+    )
+    result = RDDEstimator(bandwidth=1.0).fit(payload)
+    assert result.method == 'rdd'
+    assert result.ate is not None
+
+
+def test_iv_runs():
+    df = _toy_data().copy()
+    df['z'] = [1, 1, 1, 0, 0, 0, 1, 0]
+    payload = CausalAnalysisInput(
+        data=df,
+        treatment_col='treatment',
+        outcome_col='outcome',
+        covariate_cols=['x1', 'x2'],
+        instrument_col='z',
+    )
+    result = IVEstimator().fit(payload)
+    assert result.method == 'iv'
+    assert 'first_stage_f_stat' in result.diagnostics

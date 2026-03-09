@@ -6,7 +6,9 @@ from app.api.schemas import ApiError, MethodEnum
 from app.causal.base import CausalAnalysisInput, CausalEstimate
 from app.causal.causal_forest import CausalForestEstimator
 from app.causal.did import DIDEstimator
+from app.causal.iv import IVEstimator
 from app.causal.psm import PSMEstimator, PSMNoMatchError
+from app.causal.rdd import RDDEstimator
 from app.causal.uplift import UpliftEstimator
 
 
@@ -17,6 +19,7 @@ def run_causal_analysis(
     uplift_buckets: int = 5,
     cf_n_estimators: int = 200,
     cf_min_samples_leaf: int = 5,
+    rdd_bandwidth: float | None = None,
 ) -> CausalEstimate:
     method = method.lower().strip()
     if method not in MethodEnum.SUPPORTED:
@@ -31,6 +34,8 @@ def run_causal_analysis(
             min_samples_leaf=cf_min_samples_leaf,
             n_buckets=uplift_buckets,
         ),
+        "rdd": RDDEstimator(bandwidth=rdd_bandwidth),
+        "iv": IVEstimator(),
     }
 
     try:

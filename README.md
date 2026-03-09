@@ -7,7 +7,7 @@
 ## 项目目标
 - 上传 CSV 数据并自动做数据质量检查与摘要。
 - 根据数据结构自动推荐因果方法。
-- 提供可运行的基础方法：PSM、DID、Uplift、Causal Forest（异质性分析）。
+- 提供可运行的基础方法：PSM、DID、Uplift、Causal Forest、RDD、IV。
 - 输出包含假设与限制说明的 Markdown 报告，避免“相关性=因果性”的误解。
 
 ## MVP 范围
@@ -135,6 +135,8 @@ streamlit run streamlit_app.py
 - `psm`（支持 `psm_caliper` 参数）
 - `uplift`（支持 `uplift_buckets`，输出分桶与 top 人群摘要）
 - `causal_forest`（支持 `cf_n_estimators`、`cf_min_samples_leaf`，返回 CATE 排序与分桶）
+- `rdd`（支持 `running_col`、`cutoff`、`rdd_bandwidth`）
+- `iv`（支持 `instrument_col`）
 
 页面交互能力：
 - 上传 CSV 后自动读取列名，以下拉框选择 `treatment_col`、`outcome_col`、`time_col`、`group_col`
@@ -144,6 +146,8 @@ streamlit run streamlit_app.py
   - `psm` 显示 `psm_caliper`
   - `uplift` 显示 `uplift_buckets`
   - `causal_forest` 显示 `cf_buckets`、`cf_n_estimators`、`cf_min_samples_leaf`
+  - `rdd` 显示 `running_col`、`cutoff`、`rdd_bandwidth`
+  - `iv` 显示 `instrument_col`
 - 结果区分开展示：核心结果（JSON）、markdown 报告、错误提示
 - uplift / causal_forest 场景额外展示：样本排序预览、分桶统计表、Top 人群摘要
 - 支持下载 markdown 报告
@@ -161,6 +165,8 @@ pytest -q
 - DID 依赖“平行趋势”假设；若不成立，结果可能失真。
 - Uplift 模型用于“优先干预人群排序”，并不自动等于可解释的严格因果机制。
 - `causal_forest` 优先调用 `econml.CausalForestDML`；若环境未安装 econml，会自动降级为近似排序实现。
+- `rdd` 估计的是 cutoff 附近的局部效应（local effect），不代表全样本 ATE。
+- `iv` 依赖工具变量相关性、排除限制和外生性等强假设，请重点检查第一阶段强度。
 - 所有自动化结果仅供决策参考，需结合业务背景与额外稳健性检验。
 
 ## Roadmap

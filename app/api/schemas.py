@@ -60,4 +60,4 @@ class ApiError(Exception):
 
 
 class MethodEnum:
-    SUPPORTED = {"psm", "did", "uplift", "causal_forest"}
+    SUPPORTED = {"psm", "did", "uplift", "causal_forest", "rdd", "iv"}

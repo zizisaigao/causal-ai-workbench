@@ -39,6 +39,21 @@ def _append_heterogeneity_section(lines: list[str], result: CausalEstimate) -> N
     lines.append("")
 
 
+def _append_rdd_section(lines: list[str]) -> None:
+    lines.append("## RDD Method Notes")
+    lines.append("- 本方法实现 sharp RDD 的局部线性估计。")
+    lines.append("- 结果解释为 cutoff 附近的局部效应（local effect），不代表全样本 ATE。")
+    lines.append("")
+
+
+def _append_iv_section(lines: list[str]) -> None:
+    lines.append("## IV Method Notes")
+    lines.append("- 本方法使用最小可用 2SLS 流程（两阶段回归）。")
+    lines.append("- 因果解释高度依赖工具变量相关性、排除限制和外生性强假设。")
+    lines.append("- 请重点关注第一阶段强度（如 first-stage F statistic）。")
+    lines.append("")
+
+
 def generate_markdown_report(result: CausalEstimate) -> str:
     lines = [
         f"# Causal Analysis Report - {result.method.upper()}",
@@ -59,6 +74,10 @@ def generate_markdown_report(result: CausalEstimate) -> str:
 
     if result.method in {"uplift", "causal_forest"}:
         _append_heterogeneity_section(lines, result)
+    if result.method == "rdd":
+        _append_rdd_section(lines)
+    if result.method == "iv":
+        _append_iv_section(lines)
 
     lines.append("## Diagnostics")
     for k, v in result.diagnostics.items():

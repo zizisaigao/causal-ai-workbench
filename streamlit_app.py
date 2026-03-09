@@ -13,7 +13,7 @@ st.set_page_config(page_title="Causal AI Workbench Demo", layout="wide")
 DEFAULT_API_BASE = "http://127.0.0.1:8000/api"
 
 st.title("Causal AI Workbench · MVP Demo")
-st.caption("上传 CSV，选择字段并调用现有 FastAPI 接口运行 DID / PSM / Uplift 分析。")
+st.caption("上传 CSV，选择字段并调用现有 FastAPI 接口运行 DID / PSM / Uplift / CausalForest / RDD / IV 分析。")
 
 api_base = st.text_input("API Base URL", value=DEFAULT_API_BASE)
 uploaded = st.file_uploader("上传 CSV 文件", type=["csv"])
@@ -34,7 +34,7 @@ st.subheader("数据预览")
 st.dataframe(df.head(20), use_container_width=True)
 
 columns = df.columns.tolist()
-method = st.selectbox("分析方法", ["did", "psm", "uplift", "causal_forest"])
+method = st.selectbox("分析方法", ["did", "psm", "uplift", "causal_forest", "rdd", "iv"])
 
 col1, col2 = st.columns(2)
 with col1:
@@ -52,6 +52,10 @@ psm_caliper = 1.0
 uplift_buckets = 5
 cf_n_estimators = 200
 cf_min_samples_leaf = 5
+running_col = ""
+cutoff = 0.0
+rdd_bandwidth = 1.0
+instrument_col = ""
 
 if method == "did":
     p1, p2 = st.columns(2)
@@ -70,7 +74,7 @@ elif method == "psm":
 elif method == "uplift":
     uplift_buckets = st.selectbox("uplift_buckets", [5, 10], index=0)
     st.caption("Uplift 会输出样本排序分数与分桶统计，用于干预优先级建议。")
-else:
+elif method == "causal_forest":
     c1, c2, c3 = st.columns(3)
     with c1:
         uplift_buckets = st.selectbox("cf_buckets", [5, 10], index=0)
@@ -79,6 +83,18 @@ else:
     with c3:
         cf_min_samples_leaf = st.number_input("cf_min_samples_leaf", min_value=1, value=5, step=1)
     st.caption("Causal Forest 优先使用 econml；若不可用会自动降级到近似方法。")
+elif method == "rdd":
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        running_col = st.selectbox("running_col", [""] + columns)
+    with c2:
+        cutoff = st.number_input("cutoff", value=0.0, step=0.1)
+    with c3:
+        rdd_bandwidth = st.number_input("rdd_bandwidth", min_value=0.0001, value=1.0, step=0.1)
+    st.caption("RDD 估计的是 cutoff 附近的局部效应。")
+else:
+    instrument_col = st.selectbox("instrument_col", [""] + columns)
+    st.caption("IV 使用两阶段最小二乘(2SLS)，请确保工具变量相关且满足排除限制。")
 
 run_clicked = st.button("运行分析", type="primary")
 
@@ -90,6 +106,12 @@ if run_clicked:
         st.session_state.analysis_error = {
             "error": {"code": "invalid_input", "message": "DID 需要选择 time_col 和 group_col。"}
         }
+        st.session_state.analysis_payload = None
+    elif method == "rdd" and not running_col:
+        st.session_state.analysis_error = {"error": {"code": "invalid_input", "message": "RDD 需要 running_col。"}}
+        st.session_state.analysis_payload = None
+    elif method == "iv" and not instrument_col:
+        st.session_state.analysis_error = {"error": {"code": "invalid_input", "message": "IV 需要 instrument_col。"}}
         st.session_state.analysis_payload = None
     else:
         files = {"file": (uploaded.name, io.BytesIO(file_bytes), "text/csv")}
@@ -106,10 +128,16 @@ if run_clicked:
             data["psm_caliper"] = str(psm_caliper)
         elif method == "uplift":
             data["uplift_buckets"] = str(uplift_buckets)
-        else:
+        elif method == "causal_forest":
             data["uplift_buckets"] = str(uplift_buckets)
             data["cf_n_estimators"] = str(cf_n_estimators)
             data["cf_min_samples_leaf"] = str(cf_min_samples_leaf)
+        elif method == "rdd":
+            data["running_col"] = running_col
+            data["cutoff"] = str(cutoff)
+            data["rdd_bandwidth"] = str(rdd_bandwidth)
+        else:
+            data["instrument_col"] = instrument_col
 
         try:
             with st.spinner("调用后端分析中..."):

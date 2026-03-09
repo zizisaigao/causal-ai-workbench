@@ -50,6 +50,8 @@ async def run_analysis(
     uplift_buckets: int = Form(default=5),
     cf_n_estimators: int = Form(default=200),
     cf_min_samples_leaf: int = Form(default=5),
+    rdd_bandwidth: float | None = Form(default=None),
+    instrument_col: str | None = Form(default=None),
 ) -> AnalyzeResponse:
     df = pd.read_csv(file.file)
     covariate_cols = [c.strip() for c in covariates.split(",") if c.strip()]
@@ -63,6 +65,7 @@ async def run_analysis(
         group_col=group_col,
         running_col=running_col,
         cutoff=cutoff,
+        instrument_col=instrument_col,
         metadata={"filename": Path(file.filename).name if file.filename else "uploaded.csv"},
     )
 
@@ -73,6 +76,7 @@ async def run_analysis(
         uplift_buckets=uplift_buckets,
         cf_n_estimators=cf_n_estimators,
         cf_min_samples_leaf=cf_min_samples_leaf,
+        rdd_bandwidth=rdd_bandwidth,
     )
     report = generate_markdown_report(result)
     return AnalyzeResponse(result=result.__dict__, report_markdown=report)

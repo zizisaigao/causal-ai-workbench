@@ -83,3 +83,68 @@ def test_causal_forest_analysis_success():
     assert body['result']['method'] == 'causal_forest'
     assert 'bucket_summary' in body['result']['diagnostics']
     assert 'implementation' in body['result']['diagnostics']
+
+
+def test_rdd_analysis_success():
+    with open('data/sample/hillstrom_style_sample.csv', 'rb') as f:
+        response = client.post(
+            '/api/analyze/rdd',
+            files={'file': ('hillstrom_style_sample.csv', f, 'text/csv')},
+            data={
+                'treatment_col': 'treatment',
+                'outcome_col': 'outcome',
+                'covariates': 'age,income,prior_spend',
+                'running_col': 'prior_spend',
+                'cutoff': '90',
+                'rdd_bandwidth': '60',
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()['result']['method'] == 'rdd'
+
+
+def test_iv_analysis_success():
+    with open('data/sample/hillstrom_style_sample.csv', 'rb') as f:
+        response = client.post(
+            '/api/analyze/iv',
+            files={'file': ('hillstrom_style_sample.csv', f, 'text/csv')},
+            data={
+                'treatment_col': 'treatment',
+                'outcome_col': 'outcome',
+                'covariates': 'age,income,prior_spend',
+                'instrument_col': 'is_target_group',
+            },
+        )
+    assert response.status_code == 200
+    assert response.json()['result']['method'] == 'iv'
+
+
+def test_iv_missing_instrument_returns_structured_error():
+    with open('data/sample/hillstrom_style_sample.csv', 'rb') as f:
+        response = client.post(
+            '/api/analyze/iv',
+            files={'file': ('hillstrom_style_sample.csv', f, 'text/csv')},
+            data={
+                'treatment_col': 'treatment',
+                'outcome_col': 'outcome',
+                'covariates': 'age,income,prior_spend',
+            },
+        )
+    assert response.status_code == 422
+    assert response.json()['error']['code'] == 'invalid_analysis_input'
+
+
+def test_rdd_missing_cutoff_returns_structured_error():
+    with open('data/sample/hillstrom_style_sample.csv', 'rb') as f:
+        response = client.post(
+            '/api/analyze/rdd',
+            files={'file': ('hillstrom_style_sample.csv', f, 'text/csv')},
+            data={
+                'treatment_col': 'treatment',
+                'outcome_col': 'outcome',
+                'covariates': 'age,income,prior_spend',
+                'running_col': 'prior_spend',
+            },
+        )
+    assert response.status_code == 422
+    assert response.json()['error']['code'] == 'invalid_analysis_input'

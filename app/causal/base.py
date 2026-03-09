@@ -21,6 +21,7 @@ class CausalAnalysisInput:
     group_col: str | None = None
     running_col: str | None = None
     cutoff: float | None = None
+    instrument_col: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
