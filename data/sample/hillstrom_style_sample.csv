@@ -1,0 +1,11 @@
+customer_id,treatment,outcome,age,income,prior_spend,period,is_target_group,segment
+1,1,120,25,52000,80,pre,1,A
+2,1,150,31,61000,110,post,1,A
+3,0,90,44,48000,60,pre,0,B
+4,0,95,46,50000,70,post,0,B
+5,1,180,29,72000,140,post,1,A
+6,0,85,39,45000,50,pre,0,C
+7,1,130,36,58000,95,pre,1,B
+8,0,100,41,54000,88,post,0,C
+9,1,170,33,69000,132,post,1,A
+10,0,92,52,47000,65,pre,0,B
